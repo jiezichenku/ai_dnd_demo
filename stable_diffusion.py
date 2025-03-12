@@ -49,7 +49,6 @@ class StableDiffusion:
             print(f"Loading model {model_id} on {self.device}...")
 
             if self.is_sdxl:
-                from diffusers import StableDiffusionXLPipeline
                 torch_dtype = torch.float16 if self.device == "cuda" else torch.float32
                 with torch.amp.autocast("cuda"):
                     self.model = StableDiffusionXLPipeline.from_pretrained(

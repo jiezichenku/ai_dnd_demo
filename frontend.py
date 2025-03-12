@@ -1,10 +1,7 @@
 import sys
 import asyncio
 import time
-import ollama
 from datetime import datetime
-from pathlib import Path
-from typing import AsyncGenerator, Optional, Dict, List, Any, Generator
 
 import torch
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -12,7 +9,6 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QH
                              QGroupBox, QGridLayout)
 from PyQt6.QtCore import QObject, pyqtSignal as Signal, QThreadPool, Qt
 from PyQt6.QtGui import QPixmap, QImage
-import random
 
 from deepseek import Deepseek
 from stable_diffusion import StableDiffusion

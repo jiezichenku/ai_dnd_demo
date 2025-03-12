@@ -1,3 +1,4 @@
 .idea/
 venv/
+model_cache/
 api_config.ini
