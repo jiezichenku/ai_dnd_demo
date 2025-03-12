@@ -1,6 +1,5 @@
 import os
 import configparser
-import logging
 from datetime import datetime
 
 def log(prefix, message):

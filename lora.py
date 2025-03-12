@@ -10,7 +10,6 @@ from tqdm import tqdm
 from datetime import datetime
 from PIL import Image
 from torchvision import transforms
-from collections import defaultdict
 from safetensors.torch import save_file
 
 # Diffusers和相关优化库

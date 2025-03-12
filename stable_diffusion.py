@@ -1,11 +1,8 @@
-import asyncio
 import random
 
 from diffusers import StableDiffusionPipeline, StableDiffusionXLPipeline
 import torch
-from PIL import Image
 import os
-from safetensors.torch import load_file
 
 from api_manager import api_manager
 

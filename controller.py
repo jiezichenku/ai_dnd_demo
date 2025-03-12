@@ -1,4 +1,3 @@
-import sys
 import asyncio
 import time
 import torch
@@ -179,7 +178,6 @@ class AIManager(QObject):
 
                 # 发送标签后的文本
                 if len(parts) > 1 and parts[1]:
-                    log("AIManager", f"发送{"}"}后的文本: '{parts[1]}'")
                     self.text_chunk_ready.emit(parts[1])
 
                 continue

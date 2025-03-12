@@ -1,13 +1,10 @@
 import asyncio
 import ollama
-import json
 import requests
 
 from api_manager import api_manager
 from datetime import datetime
-from typing import AsyncGenerator, Generator, List, Dict, Any, Optional
-
-from utils.p4_utils import save
+from typing import AsyncGenerator, Generator, List, Dict, Any
 
 def log(prefix, message):
     timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
