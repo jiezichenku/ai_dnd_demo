@@ -1,15 +1,22 @@
 import sys
 import asyncio
 import time
+import ollama
 from datetime import datetime
+from pathlib import Path
+from typing import AsyncGenerator, Optional, Dict, List, Any, Generator
+
 import torch
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-                             QTextEdit, QLineEdit, QPushButton, QLabel, QSplitter)
+                             QTextEdit, QLineEdit, QPushButton, QLabel, QSplitter,
+                             QGroupBox, QGridLayout)
 from PyQt6.QtCore import QObject, pyqtSignal as Signal, QThreadPool, Qt
 from PyQt6.QtGui import QPixmap, QImage
+import random
 
 from deepseek import Deepseek
 from stable_diffusion import StableDiffusion
+from character import Character
 
 
 # 调试日志函数
@@ -324,13 +331,87 @@ class ChatWindow(QMainWindow):
         log("ChatWindow", f"收到错误: {error_message}")
         self.status_label.setText(f"错误: {error_message}")
 
+    def __init__(self):
+        super().__init__()
+        log("ChatWindow", "初始化主窗口")
+        self.setWindowTitle("DeepSeek Chat & Image Generator")
+        self.setMinimumSize(800, 600)
+
+        log("ChatWindow", "创建AIManager实例")
+        self.ai_manager = AIManager(self)  # 设置父对象为主窗口
+        log("ChatWindow", "连接AIManager信号")
+        self.ai_manager.text_chunk_ready.connect(self.update_chat_text)
+        self.ai_manager.image_ready.connect(self.update_image)
+        self.ai_manager.thinking_changed.connect(self.set_thinking_status)
+        self.ai_manager.prompt_extracted.connect(self.update_prompt_label)
+        self.ai_manager.error_occurred.connect(self.handle_error)
+        
+        # 创建角色实例
+        self.character = Character(1001, "冒险者", "探险家")
+        
+        log("ChatWindow", "设置UI组件")
+        self.setup_ui()
+        log("ChatWindow", "主窗口初始化完成")
+
     def setup_ui(self):
         log("ChatWindow", "开始设置UI")
         # 创建主窗口布局
         main_widget = QWidget()
         main_layout = QHBoxLayout(main_widget)
 
-        # 创建左侧聊天部分
+        # 创建左侧状态栏部分
+        status_widget = QWidget()
+        status_layout = QVBoxLayout(status_widget)
+        
+        # 角色基本信息组
+        char_info_group = QGroupBox("角色信息")
+        char_info_layout = QGridLayout()
+        
+        # 添加角色基本信息
+        char_info_layout.addWidget(QLabel(f"姓名: {self.character.name}"), 0, 0)
+        char_info_layout.addWidget(QLabel(f"职业: {self.character.role}"), 0, 1)
+        char_info_layout.addWidget(QLabel(f"性别: {self.character.gender}"), 1, 0)
+        char_info_layout.addWidget(QLabel(f"年龄: {self.character.age}"), 1, 1)
+        char_info_layout.addWidget(QLabel(f"来自: {self.character.hometown}"), 2, 0, 1, 2)
+        
+        char_info_group.setLayout(char_info_layout)
+        status_layout.addWidget(char_info_group)
+        
+        # 基础属性组
+        base_attr_group = QGroupBox("基础属性")
+        base_attr_layout = QGridLayout()
+        
+        # 添加基础属性
+        base_attr_layout.addWidget(QLabel(f"力量(STR): {self.character.STR}"), 0, 0)
+        base_attr_layout.addWidget(QLabel(f"体质(CON): {self.character.CON}"), 0, 1)
+        base_attr_layout.addWidget(QLabel(f"体型(SIZ): {self.character.SIZ}"), 1, 0)
+        base_attr_layout.addWidget(QLabel(f"敏捷(DEX): {self.character.DEX}"), 1, 1)
+        base_attr_layout.addWidget(QLabel(f"外貌(APP): {self.character.APP}"), 2, 0)
+        base_attr_layout.addWidget(QLabel(f"智力(INT): {self.character.INT}"), 2, 1)
+        base_attr_layout.addWidget(QLabel(f"意志(POW): {self.character.POW}"), 3, 0)
+        base_attr_layout.addWidget(QLabel(f"教育(EDU): {self.character.EDU}"), 3, 1)
+        
+        base_attr_group.setLayout(base_attr_layout)
+        status_layout.addWidget(base_attr_group)
+        
+        # 派生属性组
+        derived_attr_group = QGroupBox("派生属性")
+        derived_attr_layout = QGridLayout()
+        
+        # 添加派生属性
+        derived_attr_layout.addWidget(QLabel(f"移动力(MOV): {self.character.MOV}"), 0, 0)
+        derived_attr_layout.addWidget(QLabel(f"生命值(HP): {self.character.HP}/{self.character.HP_max}"), 0, 1)
+        derived_attr_layout.addWidget(QLabel(f"理智值(SAN): {self.character.SAN}/{self.character.SAN_max}"), 1, 0)
+        derived_attr_layout.addWidget(QLabel(f"魔力值(MP): {self.character.MP}"), 1, 1)
+        derived_attr_layout.addWidget(QLabel(f"幸运值(LUCK): {self.character.LUCK}"), 2, 0, 1, 2)
+        
+        derived_attr_group.setLayout(derived_attr_layout)
+        status_layout.addWidget(derived_attr_group)
+        
+        # 添加填充空间
+        status_layout.addStretch(1)
+
+        # 创建中间聊天部分
         chat_widget = QWidget()
         chat_layout = QVBoxLayout(chat_widget)
 
@@ -372,18 +453,25 @@ class ChatWindow(QMainWindow):
         self.status_label = QLabel("准备就绪")
         chat_layout.addWidget(self.status_label)
 
-        # 使用分割器整合左右两侧
-        splitter = QSplitter(Qt.Orientation.Horizontal)
-        splitter.addWidget(chat_widget)
-        splitter.addWidget(image_widget)
-        splitter.setSizes([400, 400])
-
-        main_layout.addWidget(splitter)
+        # 使用分割器整合所有部分
+        main_splitter = QSplitter(Qt.Orientation.Horizontal)
+        main_splitter.addWidget(status_widget)
+        
+        # 右侧聊天和图像分割
+        right_splitter = QSplitter(Qt.Orientation.Horizontal)
+        right_splitter.addWidget(chat_widget)
+        right_splitter.addWidget(image_widget)
+        right_splitter.setSizes([400, 400])
+        
+        main_splitter.addWidget(right_splitter)
+        main_splitter.setSizes([200, 600])  # 设置左边状态栏和右边内容的比例
+        
+        main_layout.addWidget(main_splitter)
         self.setCentralWidget(main_widget)
 
         # 初始欢迎消息
         log("ChatWindow", "添加欢迎消息")
-        self.chat_display.append("欢迎使用DeepSeek聊天与图像生成器！\n请发送消息开始对话。")
+        self.chat_display.append("初始化角色成功，请开始你的旅程。")
         log("ChatWindow", "UI设置完成")
 
 

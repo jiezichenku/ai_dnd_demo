@@ -1,10 +1,16 @@
+import asyncio
 import random
+
 from diffusers import StableDiffusionPipeline, StableDiffusionXLPipeline
 import torch
+from PIL import Image
 import os
+from safetensors.torch import load_file
+
+from api_manager import api_manager
 
 class StableDiffusion:
-    def __init__(self, hf_token):
+    def __init__(self):
         # 设置模型缓存目录
         self.cache_dir = os.path.join(os.path.dirname(__file__), "model_cache")
         os.makedirs(self.cache_dir, exist_ok=True)
@@ -14,18 +20,16 @@ class StableDiffusion:
         print(self.device)
         self.model = None
         self.is_sdxl = False
-        self.hf_token = hf_token
         self.sd_seed = random.randint(0, 120901813)
-
+        # 获取HuggingFace配置
+        hf_config = api_manager.get_huggingface_config()
+        self.api_url = hf_config.get('api_url', 'https://api-inference.huggingface.co/models/')
+        self.token = hf_config.get('token', '')
+        self.default_model = hf_config.get('default_model', 'John6666/wai-nsfw-illustrious-v110-sdxl')
         # 预定义高质量动漫风格模型
         self.ANIME_MODELS = {
             "anything_v5": "stablediffusionapi/anything-v5",  # 类NAI风格
             "sdxl": "John6666/wai-nsfw-illustrious-v110-sdxl",  # 新型高质量动漫模型
-        }
-
-        # VAE文件映射（文件名需要与实际下载的文件名匹配）
-        self.VAE_FILES = {
-            "sdxl_base": "sdxl_vae.safetensors",  # SDXL基础VAE
         }
 
         if not self.load_model():
@@ -67,8 +71,6 @@ class StableDiffusion:
                     if hasattr(self.model, 'text_encoder_2'):
                         self.model.text_encoder_2 = self.model.text_encoder_2.to(memory_format=torch.channels_last)
 
-                # 启用VAE切片和注意力切片以优化内存使用
-                self.model.enable_vae_slicing()
                 self.model.enable_attention_slicing()
 
                 # 设置Clip Skip
@@ -96,7 +98,6 @@ class StableDiffusion:
             # 可选：启用内存优化
             if self.device == "cuda":
                 self.model.enable_attention_slicing()
-                self.model.enable_vae_slicing()
 
             print("Model loaded successfully!")
             return True
@@ -164,7 +165,6 @@ class StableDiffusion:
                        num_inference_steps=20,
                        guidance_scale=4.5,
                        seed=None,
-                       vae_batch_size=1,
                        tiling=False,
                        clip_skip=2):
         """
@@ -227,15 +227,6 @@ class StableDiffusion:
         try:
             # 设置随机种子
             torch.manual_seed(self.sd_seed)
-
-            # VAE优化设置
-            if tiling:
-                self.model.vae.enable_tiling()
-            else:
-                self.model.vae.disable_tiling()
-
-            # 设置VAE批处理大小
-            self.model.vae.config.batch_size = vae_batch_size
 
             # 生成图像
             full_positive = prompt + default_anime_positive
@@ -314,6 +305,8 @@ def main(prompt="", lora=None):
         prompt=prompt,
         negative_prompt=negative_prompt,
         num_images=2,
+        height=768,
+        width=1440
     )
 
     if images:
@@ -354,7 +347,8 @@ def check_cuda_environment():
 if __name__ == "__main__":
     # check_cuda_environment()
     prompt = """
-        fuxuan_(honkai_star_rail), white pantyhose, school uniform, sitting
+        huohuo_(honkai_star_rail), white pantyhose, school uniform, twin tails, 
+        shibari, bondage, red rope, suspension
     """
     lora = "lora/suspensionIllustrious.safetensors"
-    main()
+    main(prompt=prompt)
